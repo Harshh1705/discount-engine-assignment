@@ -8,8 +8,9 @@
  *
  * DiscountRule {
  *   ruleId:    string       — e.g. "RULE-01"
- *   scope:     "brand" | "platform"
+ *   scope:     "brand" | "platform" | "cart"
  *   appliesTo: string       — e.g. "Natura Casa", "Amazon India"
+ *   minCartValue?: number   — cart threshold in rupees
  *   type:      "percentage" | "flat"
  *   value:     number       — percentage as integer (15 = 15%), flat in rupees
  *   stackable: boolean
@@ -34,6 +35,16 @@
  *   appliedRules:  string[]
  *   skippedRules:  string[]
  *   reasoning:     string   — customer-readable explanation
+ * }
+
+ * CartOfferResult {
+ *   ruleId:         string
+ *   threshold:      number
+ *   percentage:     number
+ *   savings:        number
+ *   subtotalBefore: number
+ *   finalCartTotal: number
+ *   reasoning:      string
  * }
  */
 
@@ -77,6 +88,55 @@ function ruleToReasoning(rule) {
     return `${scopeLabel} offer: Rs.${rule.value} off`
   }
   return `${scopeLabel} offer applied`
+}
+
+function cartRuleMatches(subtotal, rule) {
+  return rule.scope === 'cart' && subtotal >= rule.minCartValue
+}
+
+function cartRuleSavings(subtotal, rule) {
+  return calculateDiscountAmount(subtotal, rule)
+}
+
+function chooseCartRule(subtotal, rules) {
+  const matchingRules = rules.filter((rule) => cartRuleMatches(subtotal, rule))
+
+  if (matchingRules.length === 0) {
+    return null
+  }
+
+  return [...matchingRules].sort((a, b) => {
+    const savingDiff = cartRuleSavings(subtotal, b) - cartRuleSavings(subtotal, a)
+    if (savingDiff !== 0) return savingDiff
+    return b.minCartValue - a.minCartValue
+  })[0]
+}
+
+function applyCartOffer(subtotal, rules) {
+  const winningRule = chooseCartRule(subtotal, rules)
+
+  if (!winningRule) {
+    return {
+      cartOffer: null,
+      finalCartTotal: subtotal,
+    }
+  }
+
+  const savings = cartRuleSavings(subtotal, winningRule)
+  const finalCartTotal = Math.round(subtotal - savings)
+
+  return {
+    cartOffer: {
+      ruleId: winningRule.ruleId,
+      threshold: winningRule.minCartValue,
+      percentage: winningRule.value,
+      savings,
+      subtotalBefore: subtotal,
+      finalCartTotal,
+      reasoning: `Cart offer: ${winningRule.value}% off`,
+    },
+    finalCartTotal,
+  }
 }
 
 /**
@@ -163,7 +223,16 @@ export function applyDiscounts(item, rules) {
  * Returns an array of DiscountResult objects.
  */
 export function processCart(cartItems, rules) {
-  return cartItems.map((item) => applyDiscounts(item, rules))
+  const itemResults = cartItems.map((item) => applyDiscounts(item, rules))
+  const subtotal = cartTotal(itemResults)
+  const { cartOffer, finalCartTotal } = applyCartOffer(subtotal, rules)
+
+  return {
+    itemResults,
+    cartSubtotal: subtotal,
+    cartOffer,
+    finalCartTotal,
+  }
 }
 
 /**

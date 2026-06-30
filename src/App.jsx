@@ -10,7 +10,7 @@ import CsvUploader from './components/CsvUploader.jsx'
 import DataTable from './components/DataTable.jsx'
 import ErrorBanner from './components/ErrorBanner.jsx'
 import { parseRulesCSV, parseCartCSV } from './engine/csvParser.js'
-import { processCart, cartTotal } from './engine/discountEngine.js'
+import { processCart } from './engine/discountEngine.js'
 
 // ── Column definitions ───────────────────────────────────────────
 
@@ -94,6 +94,14 @@ const S = {
     gap: '1rem', marginTop: '0.75rem', paddingTop: '0.75rem',
     borderTop: '2px solid #131A48',
   },
+  cartOfferRow: {
+    display: 'flex', justifyContent: 'flex-end', alignItems: 'center',
+    gap: '0.5rem', marginTop: '0.75rem', paddingTop: '0.75rem',
+    borderTop: '1px dashed #CECECE',
+    color: '#131A48', fontWeight: 600,
+  },
+  cartOfferLabel: { color: '#131A48' },
+  cartOfferValue: { color: '#1e5c2c' },
   totalLabel: { fontWeight: 700, fontSize: 14, color: '#131A48' },
   totalValue: { fontWeight: 700, fontSize: 16, color: '#131A48' },
   tag: (color, bg) => ({
@@ -134,8 +142,7 @@ export default function App() {
   }
 
   function handleCalculate() {
-    const res = processCart(cartItems, rules)
-    setResults(res)
+    setResults(processCart(cartItems, rules))
   }
 
   const canCalculate = rules.length > 0 && cartItems.length > 0
@@ -217,10 +224,16 @@ export default function App() {
         {results && (
           <div style={S.section}>
             <div style={S.sectionTitle}>Cart Summary</div>
-            <DataTable columns={RESULTS_COLUMNS} rows={results} />
+            <DataTable columns={RESULTS_COLUMNS} rows={results.itemResults} />
+            {results.cartOffer && (
+              <div style={S.cartOfferRow}>
+                <span style={S.cartOfferLabel}>{results.cartOffer.reasoning}</span>
+                <span style={S.cartOfferValue}>— Rs.{results.cartOffer.savings.toLocaleString('en-IN')} saved</span>
+              </div>
+            )}
             <div style={S.totalRow}>
               <span style={S.totalLabel}>Cart Total</span>
-              <span style={S.totalValue}>Rs.{cartTotal(results).toLocaleString('en-IN')}</span>
+              <span style={S.totalValue}>Rs.{results.finalCartTotal.toLocaleString('en-IN')}</span>
             </div>
           </div>
         )}

@@ -6,7 +6,7 @@
  * internal data shapes.
  *
  * Expected rules.csv columns:
- *   rule_id, scope, applies_to, type, value, stackable
+ *   rule_id, scope, applies_to, min_cart_value, type, value, stackable
  *
  * Expected cart.csv columns:
  *   item_id, product, brand, platform, base_price
@@ -38,10 +38,18 @@ export function parseRulesCSV(csvText) {
 
     if (!row.rule_id) missing.push('rule_id')
     if (!row.scope) missing.push('scope')
-    if (!row.applies_to) missing.push('applies_to')
     if (!row.type) missing.push('type')
     if (row.value === undefined || row.value === '') missing.push('value')
     if (row.stackable === undefined || row.stackable === '') missing.push('stackable')
+
+    if (row.scope) {
+      const scope = row.scope.trim().toLowerCase()
+      if (scope === 'cart') {
+        if (row.min_cart_value === undefined || row.min_cart_value === '') missing.push('min_cart_value')
+      } else {
+        if (!row.applies_to) missing.push('applies_to')
+      }
+    }
 
     if (missing.length > 0) {
       errors.push(`Row ${rowNum}: missing fields — ${missing.join(', ')}`)
@@ -49,13 +57,18 @@ export function parseRulesCSV(csvText) {
     }
 
     const scope = row.scope.trim().toLowerCase()
-    if (scope !== 'brand' && scope !== 'platform') {
-      errors.push(`Row ${rowNum}: scope must be "brand" or "platform", got "${row.scope}"`)
+    if (scope !== 'brand' && scope !== 'platform' && scope !== 'cart') {
+      errors.push(`Row ${rowNum}: scope must be "brand", "platform", or "cart", got "${row.scope}"`)
       return
     }
 
     const type = row.type.trim().toLowerCase()
-    if (type !== 'percentage' && type !== 'flat') {
+    if (scope === 'cart') {
+      if (type !== 'percentage') {
+        errors.push(`Row ${rowNum}: cart rules must use type "percentage", got "${row.type}"`)
+        return
+      }
+    } else if (type !== 'percentage' && type !== 'flat') {
       errors.push(`Row ${rowNum}: type must be "percentage" or "flat", got "${row.type}"`)
       return
     }
@@ -66,13 +79,20 @@ export function parseRulesCSV(csvText) {
       return
     }
 
+    const minCartValue = scope === 'cart' ? parseFloat(row.min_cart_value) : null
+    if (scope === 'cart' && (isNaN(minCartValue) || minCartValue <= 0)) {
+      errors.push(`Row ${rowNum}: min_cart_value must be a positive number, got "${row.min_cart_value}"`)
+      return
+    }
+
     const stackableStr = row.stackable.trim().toLowerCase()
     const stackable = stackableStr === 'true' || stackableStr === '1' || stackableStr === 'yes'
 
     data.push({
       ruleId: row.rule_id.trim(),
       scope,
-      appliesTo: row.applies_to.trim(),
+      appliesTo: scope === 'cart' ? '' : row.applies_to.trim(),
+      minCartValue,
       type,
       value,
       stackable,

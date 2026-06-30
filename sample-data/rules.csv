@@ -1,4 +1,5 @@
-rule_id,scope,applies_to,type,value,stackable
-RULE-01,platform,Amazon India,percentage,15,false
-RULE-02,brand,Natura Casa,flat,150,false
-RULE-03,platform,Flipkart,percentage,10,true
+rule_id,scope,applies_to,min_cart_value,type,value,stackable
+RULE-01,platform,Amazon India,,percentage,15,false
+RULE-02,brand,Natura Casa,,flat,150,false
+RULE-03,platform,Flipkart,,percentage,10,true
+RULE-04,cart,,4000,percentage,10,false
