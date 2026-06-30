@@ -69,13 +69,28 @@ A fourth input mode (JSON, API import, etc.) can be added without touching the e
 
 ## Running locally
 
+**Prerequisites:** Node.js 18+
+
 ```bash
+# 1. Install dependencies
 npm install
-cp .env.example .env   # add your API key
+
+# 2. Create .env from the example file and add your API key
+cp .env.example .env
+# Edit .env — set at least OPENROUTER_API_KEY or GROQ_API_KEY
+
+# 3. Start the app (Vite frontend + Node API server run concurrently)
 npm run dev
 ```
 
-Open http://localhost:5173
+Open **http://localhost:5173** in your browser.
+
+1. Upload `sample-data/rules.csv` as discount rules
+2. Upload `sample-data/cart.csv` as cart items (or upload an invoice PDF to test PDF parsing)
+3. Click **Calculate Discounts** to see the full breakdown
+4. To test the NL parser, type something like "20% off on Natura Casa, stackable" and click **Parse Rule**
+
+**Note:** The first NL parse may be slow (~10-15s) on OpenRouter's free tier. Switch to Groq (`LLM_PROVIDER=groq` in `.env`) for ~1-2s responses, or use a paid OpenRouter model.
 
 ## Deploying
 
