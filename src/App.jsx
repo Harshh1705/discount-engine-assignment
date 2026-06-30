@@ -67,6 +67,8 @@ const RESULTS_COLUMNS = [
   },
 ]
 
+const RULE_PARSE_ENDPOINT = '/api/parse-discount-rule'
+
 // ── Styles ───────────────────────────────────────────────────────
 
 const S = {
@@ -79,6 +81,7 @@ const S = {
   section: { background: '#fff', border: '1px solid #CECECE', borderRadius: 6, padding: '1.2rem 1.4rem', marginBottom: '1.2rem' },
   sectionTitle: { fontFamily: 'Georgia, serif', fontWeight: 700, fontSize: 14, color: '#131A48', marginBottom: '0.7rem', paddingBottom: 6, borderBottom: '2px solid #FF5800', display: 'inline-block' },
   grid2:   { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' },
+  gridAuto: { display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: '1rem' },
   btn:     {
     background: '#FF5800', color: '#fff', border: 'none', borderRadius: 4,
     padding: '0.65rem 2rem', fontSize: 13, fontWeight: 700, cursor: 'pointer',
@@ -89,6 +92,31 @@ const S = {
     padding: '0.65rem 2rem', fontSize: 13, fontWeight: 700, cursor: 'not-allowed',
     letterSpacing: '0.04em', textTransform: 'uppercase',
   },
+  secondaryBtn: {
+    background: '#fff', color: '#131A48', border: '1px solid #CECECE', borderRadius: 4,
+    padding: '0.65rem 1.2rem', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+    letterSpacing: '0.03em', textTransform: 'uppercase',
+  },
+  textArea: {
+    width: '100%', minHeight: 118, border: '1px solid #CECECE', borderRadius: 6,
+    padding: '0.8rem 0.9rem', fontSize: 14, lineHeight: 1.45, resize: 'vertical',
+    color: '#131A48', background: '#fff', boxSizing: 'border-box',
+  },
+  inputHint: { fontSize: 11, color: '#888', marginTop: 6, lineHeight: 1.4 },
+  draftCard: {
+    background: '#f7f8ff', border: '1px solid #d7dcef', borderRadius: 6,
+    padding: '0.95rem 1rem', marginTop: '0.75rem',
+  },
+  draftGrid: {
+    display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0.7rem 1rem',
+    marginTop: '0.7rem',
+  },
+  draftItem: { fontSize: 12, color: '#131A48' },
+  draftLabel: { display: 'block', fontSize: 10, color: '#6b6f86', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 },
+  helperPill: (bg, color) => ({
+    display: 'inline-block', padding: '2px 8px', borderRadius: 999,
+    background: bg, color, fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase',
+  }),
   totalRow: {
     display: 'flex', justifyContent: 'flex-end', alignItems: 'center',
     gap: '1rem', marginTop: '0.75rem', paddingTop: '0.75rem',
@@ -116,6 +144,12 @@ export default function App() {
   const [rules, setRules]           = useState([])
   const [rulesErrors, setRulesErr]  = useState([])
   const [rulesFileName, setRulesFileName] = useState('')
+  const [naturalLanguageRule, setNaturalLanguageRule] = useState('')
+  const [draftRule, setDraftRule] = useState(null)
+  const [draftRuleNote, setDraftRuleNote] = useState('')
+  const [ruleParseErrors, setRuleParseErrors] = useState([])
+  const [isParsingRule, setIsParsingRule] = useState(false)
+  const [lastConfirmedRuleId, setLastConfirmedRuleId] = useState(0)
 
   const [cartItems, setCartItems]   = useState([])
   const [cartErrors, setCartErrors] = useState([])
@@ -145,6 +179,103 @@ export default function App() {
     setResults(processCart(cartItems, rules))
   }
 
+  async function handleParseNaturalLanguageRule() {
+    const description = naturalLanguageRule.trim()
+    if (!description) {
+      setRuleParseErrors(['Enter a discount rule description first.'])
+      setDraftRule(null)
+      setDraftRuleNote('')
+      return
+    }
+
+    setIsParsingRule(true)
+    setRuleParseErrors([])
+    setDraftRule(null)
+    setDraftRuleNote('')
+
+    const knownBrands = [...new Set(cartItems.map((i) => i.brand).filter(Boolean))]
+    const knownPlatforms = [...new Set(cartItems.map((i) => i.platform).filter(Boolean))]
+
+    try {
+      const response = await fetch(RULE_PARSE_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description, knownBrands, knownPlatforms }),
+      })
+
+      const payload = await response.json().catch(() => null)
+
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Failed to parse the discount rule.')
+      }
+
+      if (payload.status !== 'ok' || !payload.draft) {
+        const missing = Array.isArray(payload.missingFields) && payload.missingFields.length > 0
+          ? ` Missing fields: ${payload.missingFields.join(', ')}.`
+          : ''
+        throw new Error(`${payload.notes || 'The request is ambiguous and cannot be resolved.'}${missing}`)
+      }
+
+      setDraftRule({
+        ...payload.draft,
+        ruleId: `RULE-NL-${String(lastConfirmedRuleId + 1).padStart(3, '0')}`,
+      })
+      setDraftRuleNote(payload.notes || 'Parsed successfully.')
+    } catch (error) {
+      setRuleParseErrors([error instanceof Error ? error.message : 'Failed to parse discount rule.'])
+    } finally {
+      setIsParsingRule(false)
+    }
+  }
+
+  function handleConfirmNaturalLanguageRule() {
+    if (!draftRule) return
+
+    const confirmedRule = {
+      ruleId: draftRule.ruleId,
+      scope: draftRule.scope,
+      appliesTo: draftRule.appliesTo || '',
+      minCartValue: draftRule.minCartValue ?? null,
+      type: draftRule.type,
+      value: draftRule.value,
+      stackable: draftRule.stackable,
+    }
+
+    const nextRules = [...rules, confirmedRule]
+    setRules(nextRules)
+    setLastConfirmedRuleId((current) => current + 1)
+    setDraftRule(null)
+    setDraftRuleNote('')
+    setNaturalLanguageRule('')
+    setRuleParseErrors([])
+
+    if (cartItems.length > 0) {
+      setResults(processCart(cartItems, nextRules))
+    } else {
+      setResults(null)
+    }
+  }
+
+  function handleDiscardNaturalLanguageRule() {
+    setDraftRule(null)
+    setDraftRuleNote('')
+    setRuleParseErrors([])
+  }
+
+  function renderRuleValue(rule) {
+    if (rule.scope === 'cart') {
+      return `Cart value >= Rs.${Number(rule.minCartValue || 0).toLocaleString('en-IN')}`
+    }
+
+    return rule.type === 'percentage'
+      ? `${rule.value}% off`
+      : `Rs.${Number(rule.value || 0).toLocaleString('en-IN')} off`
+  }
+
+  function renderRuleScope(rule) {
+    return rule.scope.charAt(0).toUpperCase() + rule.scope.slice(1)
+  }
+
   const canCalculate = rules.length > 0 && cartItems.length > 0
 
   // ── Render ──
@@ -159,8 +290,8 @@ export default function App() {
 
       <div style={S.main}>
 
-        {/* Upload row */}
-        <div style={S.grid2}>
+        {/* Rules entry row */}
+        <div style={S.gridAuto}>
           {/* Rules upload */}
           <div style={S.section}>
             <div style={S.sectionTitle}>Discount Rules</div>
@@ -172,6 +303,58 @@ export default function App() {
               fileName={rulesFileName}
             />
             <ErrorBanner errors={rulesErrors} />
+            <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #ECECF2' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#131A48', marginBottom: 6 }}>Or describe a new rule</div>
+              <textarea
+                style={S.textArea}
+                value={naturalLanguageRule}
+                onChange={(e) => setNaturalLanguageRule(e.target.value)}
+                placeholder="Example: 20% off for Natura Casa brand, stackable with other offers"
+              />
+              <div style={S.inputHint}>
+                Examples: brand discount, platform flat discount, or cart-wide threshold discount. Ambiguous prompts will be rejected for clarification.
+              </div>
+              <div style={{ display: 'flex', gap: '0.7rem', marginTop: '0.85rem', flexWrap: 'wrap' }}>
+                <button
+                  style={isParsingRule ? S.btnDisabled : S.secondaryBtn}
+                  onClick={handleParseNaturalLanguageRule}
+                  disabled={isParsingRule}
+                >
+                  {isParsingRule ? 'Parsing…' : 'Parse Rule'}
+                </button>
+                <button
+                  style={S.secondaryBtn}
+                  onClick={handleDiscardNaturalLanguageRule}
+                  disabled={!draftRule && !ruleParseErrors.length}
+                >
+                  Clear
+                </button>
+              </div>
+              <ErrorBanner errors={ruleParseErrors} />
+              {draftRule && (
+                <div style={S.draftCard}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', alignItems: 'center' }}>
+                    <div style={{ fontWeight: 700, color: '#131A48' }}>Confirm parsed rule</div>
+                    <span style={S.helperPill('#e7f6eb', '#1e5c2c')}>Ready to add</span>
+                  </div>
+                  <div style={S.draftGrid}>
+                    <div style={S.draftItem}><span style={S.draftLabel}>Scope</span>{renderRuleScope(draftRule)}</div>
+                    <div style={S.draftItem}><span style={S.draftLabel}>Applies To</span>{draftRule.appliesTo || '—'}</div>
+                    <div style={S.draftItem}><span style={S.draftLabel}>Type</span>{draftRule.type.charAt(0).toUpperCase() + draftRule.type.slice(1)}</div>
+                    <div style={S.draftItem}><span style={S.draftLabel}>Value</span>{renderRuleValue(draftRule)}</div>
+                    <div style={S.draftItem}><span style={S.draftLabel}>Stackable</span>{draftRule.stackable ? 'Yes' : 'No'}</div>
+                    <div style={S.draftItem}><span style={S.draftLabel}>Min Cart Value</span>{draftRule.minCartValue ? `Rs.${Number(draftRule.minCartValue).toLocaleString('en-IN')}` : '—'}</div>
+                  </div>
+                  {draftRuleNote && (
+                    <div style={{ marginTop: '0.75rem', fontSize: 12, color: '#4d5270' }}>{draftRuleNote}</div>
+                  )}
+                  <div style={{ display: 'flex', gap: '0.7rem', marginTop: '0.9rem', flexWrap: 'wrap' }}>
+                    <button style={S.btn} onClick={handleConfirmNaturalLanguageRule}>Confirm and Add Rule</button>
+                    <button style={S.secondaryBtn} onClick={handleDiscardNaturalLanguageRule}>Discard</button>
+                  </div>
+                </div>
+              )}
+            </div>
             {rules.length > 0 && (
               <div style={{ marginTop: '0.75rem' }}>
                 <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>

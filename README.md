@@ -12,6 +12,8 @@ npm run dev
 
 Open http://localhost:5173
 
+The dev command starts both the Vite app and the local OpenRouter proxy. Add your API key in `.env` before using the natural-language rule parser.
+
 ## Deploying
 
 ```bash
@@ -26,6 +28,21 @@ The live deployment URL must be in your README before submission.
 1. Upload `sample-data/rules.csv` as the discount rules input
 2. Upload `sample-data/cart.csv` as the cart input
 3. Click **Calculate Discounts**
+4. Or, type a plain-English discount rule in the new parser panel, review the draft, and confirm it before it is added to the active rules list
+
+## Natural-language rule parsing
+
+Create a `.env` file at the project root with at least:
+
+```bash
+OPENROUTER_API_KEY=your_key_here
+OPENROUTER_MODEL=meta-llama/llama-3.1-70b-instruct:free
+OPENROUTER_SITE_URL=http://localhost:5173
+```
+
+The parser sends one rule description at a time to OpenRouter. The LLM response is normalized into the same `DiscountRule` shape used by the CSV flow, then shown in a confirmation step before it is added.
+
+If the request is ambiguous, the UI surfaces a rejection and asks for more specific details instead of guessing.
 
 ## Project structure
 

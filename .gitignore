@@ -31,3 +31,6 @@ pnpm-debug.log*
 # OS files
 .DS_Store
 Thumbs.db
+
+# Developer notes (not part of the app)
+developers.md

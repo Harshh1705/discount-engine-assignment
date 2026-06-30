@@ -4,11 +4,15 @@
   "description": "Opptra FDE Intern Assignment — Discount Engine",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev:client": "vite",
+    "dev:server": "node server.js",
+    "dev": "concurrently -k -n server,client -c yellow,cyan \"npm run dev:server\" \"npm run dev:client\"",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
+    "concurrently": "^9.0.1",
+    "dotenv": "^16.4.5",
     "papaparse": "^5.4.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
