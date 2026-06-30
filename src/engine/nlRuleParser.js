@@ -4,6 +4,11 @@ import {
   OPENROUTER_RULE_SYSTEM_PROMPT,
   OPENROUTER_RULE_RESPONSE_FORMAT,
 } from '../config/openRouterRuleConfig.js'
+import {
+  GROQ_API_URL,
+  GROQ_DEFAULT_MODEL,
+  GROQ_RULE_RESPONSE_FORMAT,
+} from '../config/groqRuleConfig.js'
 
 function extractJsonPayload(text) {
   if (typeof text !== 'string') return null
@@ -79,9 +84,32 @@ function normalizeDraft(rawDraft) {
   }
 }
 
-export async function parseDiscountRule(description, context = {}) {
+function resolveProvider() {
+  const name = (process.env.LLM_PROVIDER || 'openrouter').toLowerCase()
+
+  if (name === 'groq') {
+    const apiKey = process.env.GROQ_API_KEY || ''
+    if (!apiKey) throw new Error('GROQ_API_KEY is missing from .env.')
+    return {
+      apiUrl: GROQ_API_URL,
+      apiKey,
+      model: process.env.GROQ_MODEL || GROQ_DEFAULT_MODEL,
+      responseFormat: GROQ_RULE_RESPONSE_FORMAT,
+    }
+  }
+
   const apiKey = process.env.OPENROUTER_API_KEY || ''
-  const model = process.env.OPENROUTER_MODEL || OPENROUTER_DEFAULT_MODEL
+  if (!apiKey) throw new Error('OPENROUTER_API_KEY is missing from .env.')
+  return {
+    apiUrl: OPENROUTER_API_URL,
+    apiKey,
+    model: process.env.OPENROUTER_MODEL || OPENROUTER_DEFAULT_MODEL,
+    responseFormat: OPENROUTER_RULE_RESPONSE_FORMAT,
+  }
+}
+
+export async function parseDiscountRule(description, context = {}) {
+  const provider = resolveProvider()
 
   let userContent = description
   if (context.knownBrands?.length || context.knownPlatforms?.length) {
@@ -96,20 +124,20 @@ export async function parseDiscountRule(description, context = {}) {
     userContent = parts.join('\n')
   }
 
-  const response = await fetch(OPENROUTER_API_URL, {
+  const response = await fetch(provider.apiUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: `Bearer ${provider.apiKey}`,
     },
     body: JSON.stringify({
-      model,
+      model: provider.model,
       messages: [
         { role: 'system', content: OPENROUTER_RULE_SYSTEM_PROMPT },
         { role: 'user', content: userContent },
       ],
       temperature: 0,
-      response_format: OPENROUTER_RULE_RESPONSE_FORMAT,
+      response_format: provider.responseFormat,
     }),
   })
 

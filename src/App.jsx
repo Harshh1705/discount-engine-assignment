@@ -11,6 +11,7 @@ import DataTable from './components/DataTable.jsx'
 import ErrorBanner from './components/ErrorBanner.jsx'
 import { parseRulesCSV, parseCartCSV } from './engine/csvParser.js'
 import { processCart } from './engine/discountEngine.js'
+import { parseCartPdf } from './engine/pdfParser.js'
 
 // ── Column definitions ───────────────────────────────────────────
 
@@ -150,6 +151,7 @@ export default function App() {
   const [ruleParseErrors, setRuleParseErrors] = useState([])
   const [isParsingRule, setIsParsingRule] = useState(false)
   const [lastConfirmedRuleId, setLastConfirmedRuleId] = useState(0)
+  const [isParsingPdf, setIsParsingPdf] = useState(false)
 
   const [cartItems, setCartItems]   = useState([])
   const [cartErrors, setCartErrors] = useState([])
@@ -173,6 +175,19 @@ export default function App() {
     setCartErrors(errors)
     setCartFileName(fileName)
     setResults(null)
+  }
+
+  async function handleCartPdfLoad(file) {
+    setIsParsingPdf(true)
+    const { data, errors } = await parseCartPdf(file)
+    setCartItems(data)
+    setCartErrors(errors)
+    setIsParsingPdf(false)
+    if (rules.length > 0 && data.length > 0 && errors.length === 0) {
+      setResults(processCart(data, rules))
+    } else {
+      setResults(null)
+    }
   }
 
   function handleCalculate() {
@@ -372,9 +387,48 @@ export default function App() {
               label="cart.csv"
               description="Upload your cart CSV"
               onLoad={handleCartLoad}
-              hasData={cartItems.length > 0}
+              hasData={cartItems.length > 0 && !cartFileName.endsWith('.pdf')}
               fileName={cartFileName}
             />
+            <div
+              style={{
+                marginTop: 8,
+                border: `2px dashed ${cartItems.length > 0 && !cartFileName.endsWith('.pdf') ? '#1e5c2c' : '#CECECE'}`,
+                borderRadius: 6,
+                padding: '0.7rem 1.2rem',
+                background: cartItems.length > 0 && !cartFileName.endsWith('.pdf') ? '#f0faf2' : '#fafafa',
+                cursor: isParsingPdf ? 'not-allowed' : 'pointer',
+                opacity: isParsingPdf ? 0.6 : 1,
+                textAlign: 'center',
+              }}
+              onClick={() => {
+                if (!isParsingPdf) document.getElementById('pdf-input').click()
+              }}
+            >
+              <input
+                id="pdf-input"
+                type="file"
+                accept=".pdf"
+                style={{ display: 'none' }}
+                disabled={isParsingPdf}
+                onChange={async (e) => {
+                  const file = e.target.files[0]
+                  if (file) await handleCartPdfLoad(file)
+                  e.target.value = ''
+                }}
+              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', justifyContent: 'center' }}>
+                <span style={{ fontSize: 18 }}>{isParsingPdf ? '⏳' : '📄'}</span>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 12, color: '#131A48' }}>
+                    {isParsingPdf ? 'Parsing PDF…' : 'Or upload invoice PDF'}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
+                    Table with Product, Brand, Platform, Base Price
+                  </div>
+                </div>
+              </div>
+            </div>
             <ErrorBanner errors={cartErrors} />
             {cartItems.length > 0 && (
               <div style={{ marginTop: '0.75rem' }}>
@@ -408,6 +462,18 @@ export default function App() {
           <div style={S.section}>
             <div style={S.sectionTitle}>Cart Summary</div>
             <DataTable columns={RESULTS_COLUMNS} rows={results.itemResults} />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '1rem', borderTop: '1px dashed #CECECE', paddingTop: '0.5rem', marginTop: '0.5rem' }}>
+              <span style={{ fontWeight: 600, fontSize: 13, color: '#131A48' }}>Cart Total (before discounts)</span>
+              <span style={{ fontWeight: 600, fontSize: 14, color: '#131A48' }}>
+                Rs.{cartItems.reduce((s, i) => s + i.basePrice, 0).toLocaleString('en-IN')}
+              </span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '1rem', marginTop: '0.35rem' }}>
+              <span style={{ fontWeight: 600, fontSize: 13, color: '#1e5c2c' }}>Cart Total (after discounts)</span>
+              <span style={{ fontWeight: 600, fontSize: 14, color: '#1e5c2c' }}>
+                Rs.{results.cartSubtotal.toLocaleString('en-IN')}
+              </span>
+            </div>
             {results.cartOffer && (
               <div style={S.cartOfferRow}>
                 <span style={S.cartOfferLabel}>{results.cartOffer.reasoning}</span>

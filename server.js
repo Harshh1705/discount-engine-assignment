@@ -5,7 +5,6 @@ import { parseDiscountRule } from './src/engine/nlRuleParser.js'
 loadEnv()
 
 const PORT = Number(process.env.PORT || 3001)
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || ''
 function sendJson(res, statusCode, payload) {
   res.writeHead(statusCode, {
     'Content-Type': 'application/json; charset=utf-8',
@@ -45,11 +44,6 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'POST' && req.url === '/api/parse-discount-rule') {
     try {
-      if (!OPENROUTER_API_KEY) {
-        sendJson(res, 500, { error: 'OPENROUTER_API_KEY is missing from .env.' })
-        return
-      }
-
       const body = await readRequestBody(req)
       const description = typeof body.description === 'string' ? body.description.trim() : ''
 

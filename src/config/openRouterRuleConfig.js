@@ -1,5 +1,5 @@
 export const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions'
-export const OPENROUTER_DEFAULT_MODEL = 'meta-llama/llama-3.1-70b-instruct:free'
+export const OPENROUTER_DEFAULT_MODEL = 'openrouter/free'
 export const OPENROUTER_APP_TITLE = 'Opptra Discount Engine'
 export const OPENROUTER_SITE_URL = 'http://localhost:5173'
 
